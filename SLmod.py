@@ -33,10 +33,19 @@ ep = 1.e-8             # tolerance for iterations
 ##########################################################
 
 
+
 ############################################################
 # function to plot geographic data on GL grid.
 def plot(fun,**kwargs):
 
+
+    #set plotting parameters
+    plt.rc('xtick', labelsize=18) 
+    plt.rc('ytick', labelsize=18) 
+    font = {'size'   : 20}
+    plt.rc('font', **font)
+    plt.rcParams['figure.figsize'] = [16, 8]
+    
     # deal with optional arguments
     cstring = kwargs.get('cmap',None)
     ofile = kwargs.get('ofile',None)
@@ -52,6 +61,7 @@ def plot(fun,**kwargs):
     xlim =  kwargs.get('xlim',None)
     ylim =  kwargs.get('ylim',None)
 
+   
     if(cstring == None):
         if(clim_pos):
             cstring = "Blues"
@@ -60,10 +70,15 @@ def plot(fun,**kwargs):
         else:
             cstring = "RdBu"
     ax = plt.axes(projection=ccrs.PlateCarree())
+     
+    
     if(contour):
         plt.contourf(fun.lons()-180,fun.lats(),fun.data,cmap=cstring,levels = ncont)
     else:
         plt.pcolormesh(fun.lons()-180,fun.lats(),fun.data,shading = 'gouraud',cmap=cstring)
+
+  
+    
     cbar = plt.colorbar(location = "bottom",fraction=0.072, pad=0.04)
     ax.coastlines()
     cbar.set_label(label,labelpad = 10)
@@ -92,7 +107,10 @@ def plot(fun,**kwargs):
 
     if(ylim != None):
         plt.ylim(ylim)
-            
+
+
+
+    
     if(ofile == None):
         plt.show()
     else:
@@ -296,7 +314,23 @@ def antarctica_mask(sl0,ice0,val = np.nan):
 
 
 #############################################################
-# returns function equal to 1 where over antarctica and val
+# returns function equal to 1 where over west antarctica and val
+# elsewhere
+def west_antarctica_mask(sl0,ice0,val = np.nan):
+  mask = ice_mask(sl0,ice0,val)
+  for ilat,lat in enumerate(mask.lats()):
+      if(lat > 0):
+          mask.data[ilat,:] = val
+      else:
+          for ilon,lon in enumerate(mask.lons()):
+              if(lon > 125):
+                  mask.data[ilat,ilon] = val
+  return mask
+
+
+
+#############################################################
+# returns function equal to 1 where over Greenland and val
 # elsewhere
 def greenland_mask(sl0,ice0,val = np.nan):
     mask = ice_mask(sl0,ice0,val)

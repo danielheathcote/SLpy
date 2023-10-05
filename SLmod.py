@@ -39,12 +39,7 @@ ep = 1.e-8             # tolerance for iterations
 def plot(fun,**kwargs):
 
 
-    #set plotting parameters
-    plt.rc('xtick', labelsize=18) 
-    plt.rc('ytick', labelsize=18) 
-    font = {'size'   : 20}
-    plt.rc('font', **font)
-    plt.rcParams['figure.figsize'] = [16, 8]
+
     
     # deal with optional arguments
     cstring = kwargs.get('cmap',None)

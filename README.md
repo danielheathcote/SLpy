@@ -1,6 +1,9 @@
-Python codes to calculate sea level fingerprints.
+# SLmod
 
-This code makes use of following non-standard packages:
+Python codes to calculate forward and adjoint sea level fingerprints.
 
-- pyshtools (https://shtools.github.io/SHTOOLS/using-with-python.html)
-- cartopy (https://scitools.org.uk/cartopy/docs/latest/)
+## Installation
+
+Clone the repository. Dependencies can be installed using
+
+`pip install -r requirments.txt`

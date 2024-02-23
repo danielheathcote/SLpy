@@ -711,7 +711,7 @@ def displacement_load(L,lat,lon,grid = 'GLQ',angle = 1.):
 
 
 ##########################################################################
-# returns the adjoint loads for a sea level measurement at 
+# returns the adjoint loads for a gravitational potential measurement
 def absolute_gravity_load(L,lat,lon,grid = 'GLQ',angle = 1.,remove_psi = True):
     lats = np.full((1),lat)
     lons = np.full((1),lon)

@@ -465,7 +465,7 @@ def loading_response(sigma):
 
 #####################################################################
 # function to solve the fingerprint problem for a given direct load
-def fingerprint(C,zeta,rotation=True):
+def fingerprint(C,zeta,rotation=True,verbose=True):
 
     # get the maximum degree
     L = C.lmax
@@ -531,7 +531,8 @@ def fingerprint(C,zeta,rotation=True):
             slnorm = np.max(np.abs(sl.data))
         else:
             err = np.max(np.abs(sl.data - sl0.data))/np.abs(slnorm)
-            print('iteration = ',it,'relative change = ',err)
+            if verbose == True:
+                print('iteration = ',it,'relative change = ',err)
 
         
         # store the most recent solution
@@ -547,7 +548,7 @@ def fingerprint(C,zeta,rotation=True):
 
 #####################################################################
 # function to solve the fingerprint problem for a given direct load
-def generalised_fingerprint(C,zeta,zeta_u,zeta_phi,kk,rotation=True):
+def generalised_fingerprint(C,zeta,zeta_u,zeta_phi,kk,rotation=True,verbose=True):
 
     # get the maximum degree
     L = C.lmax
@@ -618,7 +619,8 @@ def generalised_fingerprint(C,zeta,zeta_u,zeta_phi,kk,rotation=True):
             slnorm = np.max(np.abs(sl.data))
         else:
             err = np.max(np.abs(sl.data - sl0.data))/np.abs(slnorm)
-            print('iteration = ',it,'relative change = ',err)
+            if verbose == True:
+                print('iteration = ',it,'relative change = ',err)
 
         
         # store the most recent solution
@@ -671,15 +673,15 @@ def point_load(L,lats,lons,grid = 'GLQ',angle = 0.,w=[sentinel]):
 
 #########################################################################
 # returns the vector -\int_{\partial M} [\mathbf{x} \times (\Bom \times
-# \mathbf{x})] \zeta_{\psi} \dd S needed to deal with psi measurements
-def rotation_vector_from_zeta_psi(zeta_psi):
-    zeta_psi_lm = zeta_psi.expand(normalization='ortho')
+# \mathbf{x})] \zeta_{\phi} \dd S needed to deal with phi measurements
+def rotation_vector_from_zeta_phi(zeta_phi):
+    zeta_phi_lm = zeta_phi.expand(normalization='ortho')
     kk = np.zeros(2)
     for i in range(2):
         om = np.zeros(2)
         om[i] = 1.
         phi_2m = centrifugal_perturbation_coefficients(om)
-        kk[i] = np.sum(phi_2m[:,:3]*zeta_psi_lm.coeffs[:,2,:3])*b*b
+        kk[i] = np.sum(phi_2m[:,:3]*zeta_phi_lm.coeffs[:,2,:3])*b*b
     return kk
 
 
@@ -723,7 +725,7 @@ def absolute_gravity_load(L,lat,lon,grid = 'GLQ',angle = 1.,remove_psi = True):
         zeta_phi_lm.coeffs[:,l,:] *= (l+1)/b;
     zeta_phi = zeta_phi_lm.expand(grid = grid)
     if(remove_psi):
-        kk = -rotation_vector_from_zeta_psi(zeta_phi)
+        kk = -rotation_vector_from_zeta_phi(zeta_phi)
     else:
         kk = np.zeros(2)
     return zeta,zeta_u,zeta_phi,kk
@@ -743,7 +745,7 @@ def potential_coefficient_load(L,l,m,grid = 'GLQ',remove_psi = True):
         zeta_phi_lm.coeffs[1,l,-m] = -g/b**2
     zeta_phi = zeta_phi_lm.expand(grid = grid)
     if(remove_psi):
-        kk = -rotation_vector_from_zeta_psi(zeta_phi)
+        kk = -rotation_vector_from_zeta_phi(zeta_phi)
     else:
         kk = np.zeros(2)
     return zeta,zeta_u,zeta_phi,kk
@@ -761,7 +763,7 @@ def sea_altimetery_load(sl0,ice0,lat1 = -66,lat2 = 66,grid = 'GLQ',remove_psi = 
     zeta_u   = -1*zeta.copy()
     zeta_phi = pysh.SHGrid.from_zeros(lmax = L,grid=grid)
     if(remove_psi):
-        kk = -rotation_vector_from_zeta_psi(zeta)
+        kk = -rotation_vector_from_zeta_phi(zeta)
     else:
         kk = np.zeros(2)
     return zeta,zeta_u,zeta_phi,kk
@@ -803,7 +805,7 @@ def GRACE_average_load(w,LT = 0):
         else:
             w_lm.coeffs[:,l,:] = 0.            
     zeta_phi = w_lm.expand(grid='GLQ')
-    kk = -rotation_vector_from_zeta_psi(zeta_phi)
+    kk = -rotation_vector_from_zeta_phi(zeta_phi)
     return zeta,zeta_u,zeta_phi,kk
 
 

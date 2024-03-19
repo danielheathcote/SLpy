@@ -59,21 +59,23 @@ class GraceSolver(SeaLevelSolver):
 
     def observation_operator(self, solution_of_fingerprint_problem):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
-        
         ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]/
-        ## phi_coeffs = pysh.expand.SHExpandGLQ(solution_of_fingerprint_problem[2].to_array(),lmax_calc=self.observation_degree)
         phi_coeffs = solution_of_fingerprint_problem[2].expand().to_array()
-        ## THESE OPTIONS ARE 10^14 DIFFERENT, DUNNO WHY
 
-        coeffs_vec = phi_coeffs[:,2:self.observation_degree+1,:self.observation_degree+1].reshape(-1)
-
+        coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
+        for l in range(2,self.observation_degree+1):
+            coeffs_vec[((l)**2)-4:((l+1)**2)-4] = np.concatenate((phi_coeffs[1,l,1:l+1][::-1],phi_coeffs[0,l,0:l+1]))
+        
         return coeffs_vec
     
     def observation_operator_adjoint(self, phi_coeffs_vec):
         ## Converts a vector of phi coefficients to glq grids for the generalised fingerprint problem
 
-        phi_coeffs = np.zeros([2,self.truncation_degree+1,self.truncation_degree+1])
-        phi_coeffs[:,2:self.observation_degree+1,:self.observation_degree+1] = phi_coeffs_vec.reshape(2,self.observation_degree-1,self.observation_degree+1)
+        phi_coeffs = np.zeros((2,self.truncation_degree+1,self.truncation_degree+1))
+        ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]
+        for l in range(2,self.observation_degree+1):
+            phi_coeffs[1,l,1:l+1] = phi_coeffs_vec[(l**2)-4:(l**2)-4+l][::-1]
+            phi_coeffs[0,l,0:l+1] = phi_coeffs_vec[(l**2)-4+l:((l+1)**2)-4]
 
         zeta_phi_d = pysh.SHGrid.from_array(pysh.expand.MakeGridGLQ(phi_coeffs, extend=1), grid='GLQ')
 

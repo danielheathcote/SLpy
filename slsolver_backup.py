@@ -37,14 +37,6 @@ class SeaLevelSolver:
 
         return SL.generalised_fingerprint(self.ocean_function, zeta_d, -1*g*zeta_u_d, -1*g*zeta_phi_d, -1*g*(kk_d+SL.rotation_vector_from_zeta_phi(zeta_phi_d)), verbose=False)
     
-    def load_inner_product(self, zeta1, zeta2):
-        
-        return SL.surface_integral(zeta1*zeta2)
-
-    def solution_inner_product(self, sl1, u1, phi1, om1, sl2, u2, phi2, om2):
-
-        return SL.surface_integral(sl1*sl2 + u1*u2 + phi1*phi2) + np.inner(om1,om2)
-
     def grid_to_vector(self, glq_grid):
         ## Converts GLQGrid to a vector
         return glq_grid.to_array().reshape(-1)
@@ -70,11 +62,11 @@ class GraceSolver(SeaLevelSolver):
         ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]/
         phi_coeffs = solution_of_fingerprint_problem[2].expand().to_array()
 
-        phi_coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
+        coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
         for l in range(2,self.observation_degree+1):
-            phi_coeffs_vec[((l)**2)-4:((l+1)**2)-4] = np.concatenate((phi_coeffs[1,l,1:l+1][::-1],phi_coeffs[0,l,0:l+1]))
+            coeffs_vec[((l)**2)-4:((l+1)**2)-4] = np.concatenate((phi_coeffs[1,l,1:l+1][::-1],phi_coeffs[0,l,0:l+1]))
         
-        return phi_coeffs_vec
+        return coeffs_vec
     
     def observation_operator_adjoint(self, phi_coeffs_vec):
         ## Converts a vector of phi coefficients to glq grids for the generalised fingerprint problem
@@ -92,16 +84,6 @@ class GraceSolver(SeaLevelSolver):
 
         ## Return a quadruple of zeta_d, t_d, zeta_phi_d, kk_d
         return null_grid, null_grid, zeta_phi_d, np.array([0,0])
-    
-    def forward_operator(self):
-        return 1
-        
-    def adjoint_operator(self):
-        return 1
-    
-    def data_inner_product(self, phi1, phi2):
-
-        return np.inner(phi1,phi2)
     
     def __matmul__(self,zeta_vector):
         return self.observation_operator(self.solve_fingerprint(self.vector_to_grid(zeta_vector)))

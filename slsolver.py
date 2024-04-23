@@ -31,11 +31,11 @@ class SeaLevelSolver:
 
     def solve_fingerprint(self, zeta_glq):
 
-        return SL.fingerprint(self.ocean_function, zeta_glq, verbose=False)
+        return SL.fingerprint(self.ocean_function, zeta_glq, verbose=False, rotation = True)
     
     def solve_adjoint_fingerprint(self, zeta_d, zeta_u_d, zeta_phi_d, kk_d):
 
-        return SL.generalised_fingerprint(self.ocean_function, zeta_d, -1*g*zeta_u_d, -1*g*zeta_phi_d, -1*g*(kk_d+SL.rotation_vector_from_zeta_phi(zeta_phi_d)), verbose=False)
+        return SL.generalised_fingerprint(self.ocean_function, zeta_d, -1*zeta_u_d, -1*g*zeta_phi_d, -1*g*(kk_d-SL.rotation_vector_from_zeta_phi(zeta_phi_d)), verbose=False, rotation = True)
     
     def load_inner_product(self, zeta1, zeta2):
         
@@ -65,10 +65,10 @@ class GraceSolver(SeaLevelSolver):
         super().__init__(truncation_degree)
         self.observation_degree = observation_degree
 
-    def observation_operator(self, solution_of_fingerprint_problem):
+    def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
         ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]/
-        phi_coeffs = solution_of_fingerprint_problem[2].expand().to_array()
+        phi_coeffs = phi.expand(normalization = 'ortho').to_array()
 
         phi_coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
         for l in range(2,self.observation_degree+1):
@@ -85,7 +85,7 @@ class GraceSolver(SeaLevelSolver):
             phi_coeffs[1,l,1:l+1] = phi_coeffs_vec[(l**2)-4:(l**2)-4+l][::-1]
             phi_coeffs[0,l,0:l+1] = phi_coeffs_vec[(l**2)-4+l:((l+1)**2)-4]
 
-        zeta_phi_d = pysh.SHGrid.from_array(pysh.expand.MakeGridGLQ(phi_coeffs, extend=1), grid='GLQ')
+        zeta_phi_d = pysh.SHGrid.from_array(pysh.expand.MakeGridGLQ(phi_coeffs, extend=1, norm = 4), grid='GLQ')/(b**2)
 
         ## Create a null grid with the same dimensions as zeta_phi_d
         null_grid = pysh.SHGrid.from_zeros(lmax=self.truncation_degree,grid = 'GLQ')

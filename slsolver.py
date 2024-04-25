@@ -3,6 +3,7 @@ import pyshtools as pysh
 import RFmod as RF
 import SLmod as SL
 import xarray as xr
+from abc import ABC, abstractmethod
 
 from numpy import pi as pi
 
@@ -64,6 +65,7 @@ class GraceSolver(SeaLevelSolver):
     def __init__(self, truncation_degree, observation_degree):
         super().__init__(truncation_degree)
         self.observation_degree = observation_degree
+        self.measurement_error_covariance_matrix = np.zeros((((observation_degree+1)**2)-4,((observation_degree+1)**2)-4))
 
     def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
@@ -93,17 +95,103 @@ class GraceSolver(SeaLevelSolver):
         ## Return a quadruple of zeta_d, t_d, zeta_phi_d, kk_d
         return null_grid, null_grid, zeta_phi_d, np.array([0,0])
     
-    def forward_operator(self):
-        return 1
+    def forward_operator(self, zeta_glq):
+        ## The operator A: takes a glq grid of zeta and returns a vector of SH coefficients for phi
+        ## Could be extended to take a vector representing zeta directly
+
+        return self.observation_operator(*self.solve_fingerprint(zeta_glq))
         
-    def adjoint_operator(self):
-        return 1
+    def adjoint_operator(self, phi_coeffs_vec):
+        ## The adjoint operator A*: takes a vector of SH coefficients for phi and returns a glq grid of zeta
+
+        return self.solve_adjoint_fingerprint(*self.observation_operator_adjoint(phi_coeffs_vec))
     
     def data_inner_product(self, phi1, phi2):
 
         return np.inner(phi1,phi2)
     
+    def scale_measurement_error_covariance_matrix(self, factor):
+
+        self.measurement_error_covariance_matrix = factor*self.measurement_error_covariance_matrix
+
+    def add_to_measurement_error_covariance_matrix(self, matrix):
+
+        self.measurement_error_covariance_matrix += matrix
+    
     def __matmul__(self,zeta_vector):
         return self.observation_operator(self.solve_fingerprint(self.vector_to_grid(zeta_vector)))
 
 
+class PropertyClass(ABC):
+
+
+    def __init__(self, truncation_degree, length_of_property_vector):
+        self.truncation_degree = truncation_degree
+        self.length_of_property_vector = length_of_property_vector
+
+    @abstractmethod
+    def weighting_function(self, i):
+        pass
+
+    def forward_property_operator(self, zeta_glq):
+        ## The operator P:
+
+        property_vector = np.zeros(self.length_of_property_vector)
+
+        for i in range(self.length_of_property_vector):
+            property_vector[i] = SL.surface_integral(self.weighting_function(i)*zeta_glq)
+
+        return property_vector
+    
+    def adjoint_property_operator(self, property_vector):
+        ## The adjoint operator P*:
+
+        adjoint_property_grid = pysh.SHGrid.from_zeros(lmax = self.truncation_degree, grid = 'GLQ')
+
+        for i in range(self.length_of_property_vector):
+            adjoint_property_grid += property_vector[i]*self.weighting_function(i)
+
+        return adjoint_property_grid
+    
+    def property_inner_product(self, p1, p2):
+
+        return np.inner(p1,p2)
+    
+
+class PropertyClassGaussian(PropertyClass):
+
+
+    def __init__(self, length_of_property_vector, truncation_degree):
+        super().__init__(length_of_property_vector, truncation_degree)
+        self.vector_of_weighting_functions = [pysh.SHGrid.from_zeros(lmax = self.truncation_degree, grid = 'GLQ') for _ in range(self.length_of_property_vector)]
+
+    def generate_gaussian_averaging_function(self, index, width, lat0, lon0):
+        ## Generates a Gaussian averaging function centred at lat0, lon0
+
+        self.vector_of_weighting_functions[index] = SL.gaussian_averaging_function(L = self.truncation_degree, r = width, lat0 = lat0, lon0 = lon0)  
+
+    def weighting_function(self, i):
+        ## Returns the ith Gaussian averaging function
+
+        return self.vector_of_weighting_functions[i]
+    
+
+class PriorClass:
+
+
+    def __init__(self, truncation_degree):
+        self.truncation_degree = truncation_degree
+        self.prior_zeta = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
+        self.prior_covariance_matrix = np.zeros((truncation_degree, truncation_degree))
+
+    def set_prior_zeta(self, zeta_glq):
+        self.prior_zeta = zeta_glq
+
+    def add_to_prior_covariance_matrix(self, matrix):
+        self.prior_covariance_matrix += matrix
+
+
+class InferenceClass:
+
+    def __init__(self):
+        pass

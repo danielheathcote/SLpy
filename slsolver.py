@@ -110,6 +110,10 @@ class GraceSolver(SeaLevelSolver):
 
         return np.inner(phi1,phi2)
     
+    def set_measurement_error_covariance_matrix(self, matrix):
+
+        self.measurement_error_covariance_matrix = matrix
+    
     def scale_measurement_error_covariance_matrix(self, factor):
 
         self.measurement_error_covariance_matrix = factor*self.measurement_error_covariance_matrix
@@ -161,8 +165,8 @@ class PropertyClass(ABC):
 class PropertyClassGaussian(PropertyClass):
 
 
-    def __init__(self, length_of_property_vector, truncation_degree):
-        super().__init__(length_of_property_vector, truncation_degree)
+    def __init__(self, truncation_degree, length_of_property_vector):
+        super().__init__(truncation_degree, length_of_property_vector)
         self.vector_of_weighting_functions = [pysh.SHGrid.from_zeros(lmax = self.truncation_degree, grid = 'GLQ') for _ in range(self.length_of_property_vector)]
 
     def generate_gaussian_averaging_function(self, index, width, lat0, lon0):
@@ -187,11 +191,49 @@ class PriorClass:
     def set_prior_zeta(self, zeta_glq):
         self.prior_zeta = zeta_glq
 
+    def set_prior_covariance_matrix(self, matrix):
+        self.prior_covariance_matrix = matrix
+
     def add_to_prior_covariance_matrix(self, matrix):
         self.prior_covariance_matrix += matrix
 
+    def covariance_operator(self, fun):
+        return RF.apply_covariance(self.prior_covariance_matrix, fun)
 
-class InferenceClass:
 
-    def __init__(self):
-        pass
+class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
+
+
+    def __init__(self, truncation_degree, observation_degree, length_of_property_vector):
+        GraceSolver.__init__(self, truncation_degree, observation_degree)
+        PropertyClassGaussian.__init__(self, truncation_degree, length_of_property_vector)
+        PriorClass.__init__(self, truncation_degree)
+        self.joint_covariance_matrix = np.zeros((2,2))
+
+    def top_left_operator(self, data_vector):
+        ## The operator AQA* + R
+
+        return self.forward_operator(self.covariance_operator(self.adjoint_operator(data_vector))) + self.measurement_error_covariance_matrix
+    
+# What have I done:
+# - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)
+# - Ability to set and edit data covariance matrix
+# - Made the abstract PropertyClass which I have successfully tested
+
+# What I need to do:
+# - Sort out the covariance stuff - both z and Q. Is Q always diagonal? 
+# - How do I act z on a data vector? And then how do I build up the matrices?
+# - (as above) should I adapt forward_operator and adjoint_operator to take vectors?
+
+
+
+
+
+
+
+
+    
+
+
+                                                    
+

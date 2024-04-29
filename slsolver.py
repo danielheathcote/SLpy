@@ -62,10 +62,15 @@ class SeaLevelSolver:
 class GraceSolver(SeaLevelSolver):
 
 
+    @staticmethod
+    def size_of_data_vector(observation_degree):
+        return ((observation_degree+1)**2)-4
+    
     def __init__(self, truncation_degree, observation_degree):
         super().__init__(truncation_degree)
         self.observation_degree = observation_degree
-        self.measurement_error_covariance_matrix = np.zeros((((observation_degree+1)**2)-4,((observation_degree+1)**2)-4))
+        size = self.size_of_data_vector(observation_degree)
+        self.measurement_error_covariance_matrix = np.zeros((size,size))
 
     def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
@@ -121,28 +126,36 @@ class GraceSolver(SeaLevelSolver):
     def add_to_measurement_error_covariance_matrix(self, matrix):
 
         self.measurement_error_covariance_matrix += matrix
-    
-    def __matmul__(self,zeta_vector):
-        return self.observation_operator(self.solve_fingerprint(self.vector_to_grid(zeta_vector)))
 
+    def R_covariance_operator(self, vector):
+
+        pass
+
+    def generate_sample_from_covariance(self):
+
+        pass
+    
 
 class PropertyClass(ABC):
 
 
-    def __init__(self, truncation_degree, length_of_property_vector):
+    def __init__(self, truncation_degree):
         self.truncation_degree = truncation_degree
-        self.length_of_property_vector = length_of_property_vector
 
     @abstractmethod
     def weighting_function(self, i):
         pass
 
+    @abstractmethod
+    def length_of_property_vector(self):
+        pass
+
     def forward_property_operator(self, zeta_glq):
         ## The operator P:
 
-        property_vector = np.zeros(self.length_of_property_vector)
+        property_vector = np.zeros(self.length_of_property_vector())
 
-        for i in range(self.length_of_property_vector):
+        for i in range(self.length_of_property_vector()):
             property_vector[i] = SL.surface_integral(self.weighting_function(i)*zeta_glq)
 
         return property_vector
@@ -152,7 +165,7 @@ class PropertyClass(ABC):
 
         adjoint_property_grid = pysh.SHGrid.from_zeros(lmax = self.truncation_degree, grid = 'GLQ')
 
-        for i in range(self.length_of_property_vector):
+        for i in range(self.length_of_property_vector()):
             adjoint_property_grid += property_vector[i]*self.weighting_function(i)
 
         return adjoint_property_grid
@@ -165,9 +178,11 @@ class PropertyClass(ABC):
 class PropertyClassGaussian(PropertyClass):
 
 
-    def __init__(self, truncation_degree, length_of_property_vector):
-        super().__init__(truncation_degree, length_of_property_vector)
-        self.vector_of_weighting_functions = [pysh.SHGrid.from_zeros(lmax = self.truncation_degree, grid = 'GLQ') for _ in range(self.length_of_property_vector)]
+    def __init__(self, truncation_degree, gaussian_params = [(100,0,0)]):
+        ## gaussian_params is a list of tuples (width, lat0, lon0) for each Gaussian averaging function
+
+        super().__init__(truncation_degree)
+        self.vector_of_weighting_functions = [SL.gaussian_averaging_function(L = self.truncation_degree, r = width, lat0 = lat, lon0 = lon) for width, lat, lon in gaussian_params]
 
     def generate_gaussian_averaging_function(self, index, width, lat0, lon0):
         ## Generates a Gaussian averaging function centred at lat0, lon0
@@ -179,6 +194,10 @@ class PropertyClassGaussian(PropertyClass):
 
         return self.vector_of_weighting_functions[i]
     
+    def length_of_property_vector(self):
+        ## Returns the length of the property vector
+
+        return len(self.vector_of_weighting_functions)
 
 class PriorClass:
 
@@ -186,19 +205,19 @@ class PriorClass:
     def __init__(self, truncation_degree):
         self.truncation_degree = truncation_degree
         self.prior_zeta = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
-        self.prior_covariance_matrix = np.zeros((truncation_degree, truncation_degree))
+        self.prior_covariance_Q = np.zeros(truncation_degree)
 
     def set_prior_zeta(self, zeta_glq):
         self.prior_zeta = zeta_glq
 
-    def set_prior_covariance_matrix(self, matrix):
-        self.prior_covariance_matrix = matrix
+    def set_prior_covariance_Q(self, vector):
+        self.prior_covariance_Q = vector
 
-    def add_to_prior_covariance_matrix(self, matrix):
-        self.prior_covariance_matrix += matrix
+    def add_to_prior_covariance_Q(self, vector):
+        self.prior_covariance_Q += vector
 
-    def covariance_operator(self, fun):
-        return RF.apply_covariance(self.prior_covariance_matrix, fun)
+    def Q_covariance_operator(self, fun):
+        return RF.apply_covariance(self.prior_covariance_Q, fun)
 
 
 class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
@@ -213,17 +232,20 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     def top_left_operator(self, data_vector):
         ## The operator AQA* + R
 
-        return self.forward_operator(self.covariance_operator(self.adjoint_operator(data_vector))) + self.measurement_error_covariance_matrix
+        return self.forward_operator(self.Q_covariance_operator(self.adjoint_operator(data_vector)[0])) + self.measurement_error_covariance_matrix @ data_vector
     
 # What have I done:
 # - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)
 # - Ability to set and edit data covariance matrix
 # - Made the abstract PropertyClass which I have successfully tested
+# - Initialise gaussian weighting thing using lists of lat lon and width. New abstract method which returns the lenght of property vector
+
 
 # What I need to do:
-# - Sort out the covariance stuff - both z and Q. Is Q always diagonal? 
-# - How do I act z on a data vector? And then how do I build up the matrices?
 # - (as above) should I adapt forward_operator and adjoint_operator to take vectors?
+# - adjoint_operator spits out 5 things - where should i put the [0] index to get SL?
+# - Generate rotationally invariant random fields, try masking it with ice function, and then try multiplying it with some mean field (ubar)
+# - Then will need ways to sample from it and act the covariance operator on things
 
 
 

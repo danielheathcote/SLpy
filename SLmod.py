@@ -55,7 +55,6 @@ def plot(fun,**kwargs):
     clim_scale = kwargs.get('clim_scale',None)
     xlim =  kwargs.get('xlim',None)
     ylim =  kwargs.get('ylim',None)
-
    
     if(cstring == None):
         if(clim_pos):

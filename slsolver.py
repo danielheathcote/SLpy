@@ -204,20 +204,30 @@ class PriorClass:
 
     def __init__(self, truncation_degree):
         self.truncation_degree = truncation_degree
-        self.prior_zeta = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
-        self.prior_covariance_Q = np.zeros(truncation_degree)
+        self.prior_ice_load = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
+        self.prior_ocean_load = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
+        self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
+        self.ocean_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
 
-    def set_prior_zeta(self, zeta_glq):
-        self.prior_zeta = zeta_glq
+    def sample_individual_load(self, mean_field, Q):
+        ## For a given mean field and covariance operator Q, samples a random field
 
-    def set_prior_covariance_Q(self, vector):
-        self.prior_covariance_Q = vector
+        return mean_field*(RF.random_field(Q) + 1)
 
-    def add_to_prior_covariance_Q(self, vector):
-        self.prior_covariance_Q += vector
+    def apply_individual_load_covariance(self, mean_field, Q, fun):
+        ## For a given mean field, covariance operator Q and function, applies the covariance operator to the function
 
-    def Q_covariance_operator(self, fun):
-        return RF.apply_covariance(self.prior_covariance_Q, fun)
+        return mean_field*RF.apply_covariance(Q, mean_field*fun)
+    
+    def sample_full_load(self):
+        ## Samples a full load field
+
+        return self.sample_individual_load(self.prior_ice_load, self.ice_covariance_Q) + self.sample_individual_load(self.prior_ocean_load, self.ocean_covariance_Q)
+    
+    def apply_full_load_covariance(self, fun):
+        ## Applies the full load covariance operator to a function
+
+        return self.apply_individual_load_covariance(self.prior_ice_load, self.ice_covariance_Q, fun) + self.apply_individual_load_covariance(self.prior_ocean_load, self.ocean_covariance_Q, fun)
 
 
 class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
@@ -244,8 +254,8 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 # What I need to do:
 # - (as above) should I adapt forward_operator and adjoint_operator to take vectors?
 # - adjoint_operator spits out 5 things - where should i put the [0] index to get SL?
-# - Generate rotationally invariant random fields, try masking it with ice function, and then try multiplying it with some mean field (ubar)
-# - Then will need ways to sample from it and act the covariance operator on things
+# - Work out a way to downsample sea level data to L=64 (either by initialising some grid and interpolating manually, or by pyshtools expansions)
+# - Appraise the current framework for doing the priors (I don't think it needs to be particularly interactive)
 
 
 

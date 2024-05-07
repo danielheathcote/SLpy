@@ -70,7 +70,7 @@ class GraceSolver(SeaLevelSolver):
         super().__init__(truncation_degree)
         self.observation_degree = observation_degree
         size = self.size_of_data_vector(observation_degree)
-        self.measurement_error_covariance_matrix = np.zeros((size,size))
+        self.measurement_error_covariance_matrix = np.eye(size)
 
     def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
@@ -127,15 +127,17 @@ class GraceSolver(SeaLevelSolver):
 
         self.measurement_error_covariance_matrix += matrix
 
-    def R_covariance_operator(self, vector):
+    def apply_measurement_error_covariance(self, vector):
 
-        pass
+        return self.measurement_error_covariance_matrix @ vector
 
-    def generate_sample_from_covariance(self):
+    def generate_sample_of_measurement_error(self, num_samples):
+        ## Generates num_samples random samples from the measurement error covariance matrix
 
-        pass
-    
+        size = self.size_of_data_vector(self.observation_degree)
+        return np.random.multivariate_normal(np.zeros(size), self.measurement_error_covariance_matrix, num_samples)
 
+        
 class PropertyClass(ABC):
 
 
@@ -204,8 +206,18 @@ class PriorClass:
 
     def __init__(self, truncation_degree):
         self.truncation_degree = truncation_degree
-        self.prior_ice_load = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
-        self.prior_ocean_load = pysh.SHGrid.from_zeros(lmax = truncation_degree, grid = 'GLQ')
+
+        ## Get the ice prior
+        arr = SL.get_sl_ice_data(truncation_degree)[1].to_array()
+        self.prior_ice_load = pysh.SHGrid.from_array(np.where(arr > 0, np.log(4000/(arr+400)), 0), grid='GLQ')
+
+        ## Get the ocean prior
+        sl_anomaly_dataset = xr.open_mfdataset('/home/dah94/space/ssh/MON/dt_global_allsat_msla_h_y1993_m*.nc')
+        da = SL.format_latlon(sl_anomaly_dataset.sla.mean('time'))
+        da = da.fillna(0)        
+        self.prior_ocean_load = SL.interpolate_xarray(truncation_degree , da)
+
+        ## Set the covariances
         self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
         self.ocean_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
 
@@ -242,21 +254,22 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     def top_left_operator(self, data_vector):
         ## The operator AQA* + R
 
-        return self.forward_operator(self.Q_covariance_operator(self.adjoint_operator(data_vector)[0])) + self.measurement_error_covariance_matrix @ data_vector
+        return self.forward_operator(self.Q_covariance_operator(self.adjoint_operator(data_vector)[0])) + self.apply_measurement_error_covariance(data_vector)
     
 # What have I done:
 # - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)
 # - Ability to set and edit data covariance matrix
 # - Made the abstract PropertyClass which I have successfully tested
-# - Initialise gaussian weighting thing using lists of lat lon and width. New abstract method which returns the lenght of property vector
+# - Initialise gaussian weighting thing using lists of lat lon and width. New abstract method which returns the length of property vector
+# - Work out a way to downsample sea level data to L=64 (either by initialising some grid and interpolating manually, or by pyshtools expansions)
+# - Appraise the current framework for doing the priors (I don't think it needs to be particularly interactive)
 
 
 # What I need to do:
 # - (as above) should I adapt forward_operator and adjoint_operator to take vectors?
 # - adjoint_operator spits out 5 things - where should i put the [0] index to get SL?
-# - Work out a way to downsample sea level data to L=64 (either by initialising some grid and interpolating manually, or by pyshtools expansions)
-# - Appraise the current framework for doing the priors (I don't think it needs to be particularly interactive)
-
+# - In InferenceClass, work on a way to create a synthetic dataset (needs phi coeffs with associated errors)
+# - Do the wahr method for working out int(w*sigma) using love numbers etc.
 
 
 

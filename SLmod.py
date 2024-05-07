@@ -187,6 +187,56 @@ def get_sl_ice_data(L):
                 
     return sl,ice               
 
+
+######################################################################
+# function to format lat and lon for xarray data
+def format_latlon(da):
+    ## Function that flips lats and shifts lons to -180 to 180 d
+
+    ## First rename latitude and longitude to lat and lon, if they are not already
+    if 'latitude' in da.coords:
+        da = da.rename({'latitude':'lat'})
+    if 'longitude' in da.coords:
+        da = da.rename({'longitude':'lon'})
+
+    ## Now flip the lats
+    da = da.reindex(lat=list(reversed(da.lat)))
+
+    ## Now shift the lons
+    da = da.assign_coords(lon=(((da.lon + 180) % 360) - 180)).sortby('lon')
+
+    return da
+
+
+######################################################################
+# function to read in xarray data and interpolate onto an l=L grid
+def interpolate_xarray(L, da, shift_lons=True):
+
+    output = pysh.SHGrid.from_zeros(lmax=L,grid = 'GLQ')    
+
+    ## First rename latitude and longitude to lat and lon, if they are not already
+    if 'latitude' in da.coords:
+        da = da.rename({'latitude':'lat'})
+    if 'longitude' in da.coords:
+        da = da.rename({'longitude':'lon'})
+
+    if shift_lons == True:
+        da = da.assign_coords(lon=(((da.lon + 180) % 360))).sortby('lon')
+
+    lats = da.lat.values
+    lons = da.lon.values  
+    dat = da.values 
+
+    fun = RegularGridInterpolator((lats, lons), dat, method = 'linear',
+                                 bounds_error=False, fill_value=None)
+    
+    # interpolate onto sl grid
+    for ilat,llat in enumerate(output.lats()):
+        for ilon,llon in enumerate(output.lons()):
+            output.data[ilat,ilon] = fun((llat,llon))   
+
+    return output
+
 ########################################################
 # returns thw value of a field at a given point via
 # spherical harmonic expansion

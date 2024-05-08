@@ -27,8 +27,8 @@ class SeaLevelSolver:
 
     def __init__(self, truncation_degree):
         self.truncation_degree = truncation_degree
-        self.current_sea_level, self.current_ice_thickness = SL.get_sl_ice_data(truncation_degree)
-        self.ocean_function = SL.ocean_function(self.current_sea_level, self.current_ice_thickness)
+        current_sea_level, current_ice_thickness = SL.get_sl_ice_data(truncation_degree)
+        self.ocean_function = SL.ocean_function(current_sea_level, current_ice_thickness)
 
     def solve_fingerprint(self, zeta_glq):
 
@@ -71,6 +71,17 @@ class GraceSolver(SeaLevelSolver):
         self.observation_degree = observation_degree
         size = self.size_of_data_vector(observation_degree)
         self.measurement_error_covariance_matrix = np.eye(size)
+
+    def convert_glq_to_vector_of_sh_coeffs(self, glq_grid):
+        ## Converts a GLQ grid to a vector of SH coefficients, starting at l=2
+        ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]/
+        coeffs = glq_grid.expand(normalization = 'ortho').to_array()
+
+        coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
+        for l in range(2,self.observation_degree+1):
+            coeffs_vec[((l)**2)-4:((l+1)**2)-4] = np.concatenate((coeffs[1,l,1:l+1][::-1],coeffs[0,l,0:l+1]))
+        
+        return coeffs_vec        
 
     def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
@@ -215,7 +226,7 @@ class PriorClass:
         sl_anomaly_dataset = xr.open_mfdataset('/home/dah94/space/ssh/MON/dt_global_allsat_msla_h_y1993_m*.nc')
         da = SL.format_latlon(sl_anomaly_dataset.sla.mean('time'))
         da = da.fillna(0)        
-        self.prior_ocean_load = SL.interpolate_xarray(truncation_degree , da)
+        self.prior_ocean_load = 10*SL.interpolate_xarray(truncation_degree, da)
 
         ## Set the covariances
         self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
@@ -245,11 +256,46 @@ class PriorClass:
 class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
 
-    def __init__(self, truncation_degree, observation_degree, length_of_property_vector):
+    def __init__(self, truncation_degree, observation_degree, gaussian_params=[(100,0,0)]):
         GraceSolver.__init__(self, truncation_degree, observation_degree)
-        PropertyClassGaussian.__init__(self, truncation_degree, length_of_property_vector)
+        PropertyClassGaussian.__init__(self, truncation_degree, gaussian_params)
         PriorClass.__init__(self, truncation_degree)
         self.joint_covariance_matrix = np.zeros((2,2))
+
+    def generate_synthetic_dataset(self, num_samples):
+        ## Generates a synthetic dataset of phi coefficients with associated errors
+
+        synthetic_dataset = np.zeros((num_samples, self.size_of_data_vector(self.observation_degree)))
+        synthetic_dataset_errors = synthetic_dataset.copy()
+        self.scale_measurement_error_covariance_matrix(1e-4)
+
+        for i in range(num_samples):
+            synthetic_dataset[i] = self.forward_operator(self.sample_full_load())
+            synthetic_dataset_errors[i] = self.generate_sample_of_measurement_error(1)
+        
+        return synthetic_dataset, synthetic_dataset_errors
+
+    def wahr_method(self, phi_coeffs):
+
+        ## Load the love numbers up to truncation_degree, and define the output vector
+        _,_,_,_,_,k,_,_ = SL.generalised_love_numbers(self.truncation_degree)
+        result = np.zeros(self.length_of_property_vector())
+
+        ## Loop over the weighting functions:
+        for i in range(self.length_of_property_vector()):
+
+            ## Express the ith weighting function as a vector of SH coefficients
+            w_coeffs = self.convert_glq_to_vector_of_sh_coeffs(self.vector_of_weighting_functions[i])
+
+            ## Loop over l and m, and compute k^-1*phi_lm*w_lm
+            for l in range(2,self.observation_degree+1):
+                for m in range(-1*l,l+1):
+                    vec_index = (l**2)-4+m+l
+                    result[i] += (1/k[l]) * phi_coeffs[vec_index] * w_coeffs[vec_index]
+
+            result = result*b**2
+
+        return result
 
     def top_left_operator(self, data_vector):
         ## The operator AQA* + R

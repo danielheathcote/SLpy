@@ -267,18 +267,23 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
         synthetic_dataset = np.zeros((num_samples, self.size_of_data_vector(self.observation_degree)))
         synthetic_dataset_errors = synthetic_dataset.copy()
+
+        ## Set R
         self.scale_measurement_error_covariance_matrix(1e-4)
 
+        ## Initialise the full loads
+        load_samples = [self.sample_full_load() for _ in range(num_samples)]
+
         for i in range(num_samples):
-            synthetic_dataset[i] = self.forward_operator(self.sample_full_load())
+            synthetic_dataset[i] = self.forward_operator(load_samples[i])
             synthetic_dataset_errors[i] = self.generate_sample_of_measurement_error(1)
         
-        return synthetic_dataset, synthetic_dataset_errors
+        return synthetic_dataset, synthetic_dataset_errors, load_samples
 
     def wahr_method(self, phi_coeffs):
 
         ## Load the love numbers up to truncation_degree, and define the output vector
-        _,_,_,_,_,k,_,_ = SL.generalised_love_numbers(self.truncation_degree)
+        _,k,_,_ = SL.love_numbers(self.truncation_degree)
         result = np.zeros(self.length_of_property_vector())
 
         ## Loop over the weighting functions:
@@ -312,11 +317,9 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
 
 # What I need to do:
-# - (as above) should I adapt forward_operator and adjoint_operator to take vectors?
 # - adjoint_operator spits out 5 things - where should i put the [0] index to get SL?
-# - In InferenceClass, work on a way to create a synthetic dataset (needs phi coeffs with associated errors)
-# - Do the wahr method for working out int(w*sigma) using love numbers etc.
-
+# - Try sumI(b^2 phi_lm w_lm) = int(phi*w)dS
+    
 
 
 

@@ -86,6 +86,7 @@ class GraceSolver(SeaLevelSolver):
     def observation_operator(self, sl, u, phi, om, psi=0):
         ## Converts a solution of the fingerprint problem to a vector of SH coefficients for phi
         ## For reference: Clm = phi_coeffs[0,l,m>=0] and Slm = phi_coeffs[1,l,m>=1]/
+        ## [EDIT REQUEST]: SHOULD USE ABOVE FUNCTION!!
         phi_coeffs = phi.expand(normalization = 'ortho').to_array()
 
         phi_coeffs_vec = np.zeros(((self.observation_degree+1)**2)-4)       
@@ -120,7 +121,7 @@ class GraceSolver(SeaLevelSolver):
     def adjoint_operator(self, phi_coeffs_vec):
         ## The adjoint operator A*: takes a vector of SH coefficients for phi and returns a glq grid of zeta
 
-        return self.solve_adjoint_fingerprint(*self.observation_operator_adjoint(phi_coeffs_vec))
+        return self.solve_adjoint_fingerprint(*self.observation_operator_adjoint(phi_coeffs_vec))[0]
     
     def data_inner_product(self, phi1, phi2):
 
@@ -252,6 +253,9 @@ class PriorClass:
 
         return self.apply_individual_load_covariance(self.prior_ice_load, self.ice_covariance_Q, fun) + self.apply_individual_load_covariance(self.prior_ocean_load, self.ocean_covariance_Q, fun)
 
+    def apply_Q_covariance(self, fun):
+
+        pass
 
 class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
@@ -260,7 +264,6 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         GraceSolver.__init__(self, truncation_degree, observation_degree)
         PropertyClassGaussian.__init__(self, truncation_degree, gaussian_params)
         PriorClass.__init__(self, truncation_degree)
-        self.joint_covariance_matrix = np.zeros((2,2))
 
     def generate_synthetic_dataset(self, num_samples):
         ## Generates a synthetic dataset of phi coefficients with associated errors
@@ -305,7 +308,44 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     def top_left_operator(self, data_vector):
         ## The operator AQA* + R
 
-        return self.forward_operator(self.Q_covariance_operator(self.adjoint_operator(data_vector)[0])) + self.apply_measurement_error_covariance(data_vector)
+        return self.forward_operator(self.apply_full_load_covariance(self.adjoint_operator(data_vector))) + self.apply_measurement_error_covariance(data_vector)
+    
+    def top_right_operator(self, property_vector):
+        ## The operator AQB*
+
+        return self.forward_operator(self.apply_full_load_covariance(self.adjoint_property_operator(property_vector)))
+                                     
+    def bottom_left_operator(self, data_vector):
+        ## The operator BGA*
+
+        return self.forward_property_operator(self.apply_full_load_covariance(self.adjoint_operator(data_vector)))
+
+    def bottom_right_operator(self, property_vector):
+        ## The operator BQB*
+
+        return self.forward_property_operator(self.apply_full_load_covariance(self.adjoint_property_operator(property_vector)))
+    
+    def compute_top_left_matrix(self):
+
+        size = self.size_of_data_vector(self.observation_degree)
+        matrix = np.zeros((size,size))
+
+        for i in np.arange(size):
+            basis_vector = np.zeros(size)
+            basis_vector[i] = 1
+
+            matrix[:,i] = self.top_left_operator(basis_vector)
+
+        return matrix
+    
+    def compute_top_right_matrix(self):
+
+        data_size = self.size_of_data_vector(self.observation_degree)
+        property_size = self.length_of_property_vector()
+
+
+        
+
     
 # What have I done:
 # - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)
@@ -317,9 +357,10 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
 
 # What I need to do:
-# - adjoint_operator spits out 5 things - where should i put the [0] index to get SL?
 # - Try sumI(b^2 phi_lm w_lm) = int(phi*w)dS
-    
+# - Start working on computing the block matrices
+# - Look at the errors in the Wahr method
+# - Decide on length vs size naming 
 
 
 

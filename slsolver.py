@@ -327,11 +327,11 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     
     def compute_top_left_matrix(self):
 
-        size = self.size_of_data_vector(self.observation_degree)
-        matrix = np.zeros((size,size))
+        data_size = self.size_of_data_vector(self.observation_degree)
+        matrix = np.zeros((data_size,data_size))
 
-        for i in np.arange(size):
-            basis_vector = np.zeros(size)
+        for i in np.arange(data_size):
+            basis_vector = np.zeros(data_size)
             basis_vector[i] = 1
 
             matrix[:,i] = self.top_left_operator(basis_vector)
@@ -342,6 +342,42 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
         data_size = self.size_of_data_vector(self.observation_degree)
         property_size = self.length_of_property_vector()
+        matrix = np.zeros((data_size, property_size))
+
+        for i in np.arange(property_size):
+            basis_vector = np.zeros(property_size)
+            basis_vector[i] = 1
+
+            matrix[:,i] = self.top_right_operator(basis_vector)
+
+        return matrix
+    
+    def compute_bottom_left_matrix(self):
+
+        data_size = self.size_of_data_vector(self.observation_degree)
+        property_size = self.length_of_property_vector()
+        matrix = np.zeros((property_size, data_size))
+
+        for i in np.arange(data_size):
+            basis_vector = np.zeros(data_size)
+            basis_vector[i] = 1
+
+            matrix[:,i] = self.bottom_left_operator(basis_vector)
+
+        return matrix    
+    
+    def compute_bottom_right_matrix(self):
+
+        property_size = self.size_of_data_vector(self.observation_degree)
+        matrix = np.zeros((property_size,property_size))
+
+        for i in np.arange(property_size):
+            basis_vector = np.zeros(property_size)
+            basis_vector[i] = 1
+
+            matrix[:,i] = self.top_left_operator(basis_vector)
+
+        return matrix
 
 
         

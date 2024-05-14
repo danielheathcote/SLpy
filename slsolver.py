@@ -4,6 +4,8 @@ import RFmod as RF
 import SLmod as SL
 import xarray as xr
 from abc import ABC, abstractmethod
+from multiprocessing import Pool
+from functools import partial
 
 from numpy import pi as pi
 
@@ -327,7 +329,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     
     def compute_top_left_matrix(self):
 
-        data_size = self.size_of_data_vector(self.observation_degree)
+        data_size =  self.size_of_data_vector(self.observation_degree)
         matrix = np.zeros((data_size,data_size))
 
         for i in np.arange(data_size):
@@ -368,14 +370,51 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
     
     def compute_bottom_right_matrix(self):
 
-        property_size = self.size_of_data_vector(self.observation_degree)
+        property_size = self.length_of_property_vector()
         matrix = np.zeros((property_size,property_size))
 
         for i in np.arange(property_size):
             basis_vector = np.zeros(property_size)
             basis_vector[i] = 1
 
-            matrix[:,i] = self.top_left_operator(basis_vector)
+            matrix[:,i] = self.bottom_right_operator(basis_vector)
+
+        return matrix
+    
+    def compute_column(self, i, basis_size, operation):
+        basis_vector = np.zeros(basis_size)
+        basis_vector[i] = 1
+
+        # Dynamically call the appropriate method based on 'operation'
+        operator_method = getattr(self, f"{operation}_operator")
+        return operator_method(basis_vector)
+
+    def compute_matrix_parallel(self, operation):
+
+        data_size = self.size_of_data_vector(self.observation_degree)
+        property_size = self.length_of_property_vector()
+        
+        if operation == "top_left":
+            matrix_shape = (data_size, data_size)
+        elif operation == "top_right":
+            matrix_shape = (data_size, property_size)
+        elif operation == "bottom_left":
+            matrix_shape = (property_size, data_size)
+        elif operation == "bottom_right":
+            matrix_shape = (property_size, property_size)
+
+        matrix = np.zeros(matrix_shape)
+
+        # Define a partial function to pass additional arguments
+        partial_compute_column = partial(self.compute_column, basis_size=matrix_shape[1], operation=operation)
+
+        # Use multiprocessing Pool to parallelize the computation
+        with Pool(processes=16) as pool:
+            results = pool.map(partial_compute_column, range(matrix_shape[1]))
+
+        # Assign the results to the matrix
+        for i, result in enumerate(results):
+            matrix[:, i] = result
 
         return matrix
 

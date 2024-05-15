@@ -409,7 +409,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         partial_compute_column = partial(self.compute_column, basis_size=matrix_shape[1], operation=operation)
 
         # Use multiprocessing Pool to parallelize the computation
-        with Pool(processes=16) as pool:
+        with Pool(processes=4) as pool:
             results = pool.map(partial_compute_column, range(matrix_shape[1]))
 
         # Assign the results to the matrix

@@ -231,9 +231,13 @@ class PriorClass:
         da = da.fillna(0)        
         self.prior_ocean_load = 10*SL.interpolate_xarray(truncation_degree, da)
 
+        ## Get the total prior load
+        self.prior_total_load = self.prior_ice_load + self.prior_ocean_load
+
         ## Set the covariances
         self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
         self.ocean_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
+
 
     def sample_individual_load(self, mean_field, Q):
         ## For a given mean field and covariance operator Q, samples a random field
@@ -274,7 +278,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         synthetic_dataset_errors = synthetic_dataset.copy()
 
         ## Set R
-        self.scale_measurement_error_covariance_matrix(1e-4)
+        self.scale_measurement_error_covariance_matrix(1e-5)
 
         ## Initialise the full loads
         load_samples = [self.sample_full_load() for _ in range(num_samples)]
@@ -282,6 +286,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         for i in range(num_samples):
             synthetic_dataset[i] = self.forward_operator(load_samples[i])
             synthetic_dataset_errors[i] = self.generate_sample_of_measurement_error(1)
+            synthetic_dataset[i] += synthetic_dataset_errors[i]
         
         return synthetic_dataset, synthetic_dataset_errors, load_samples
 
@@ -418,7 +423,65 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
         return matrix
 
+    def compute_posterior_property_vector(self, set_of_data_vectors):
+        ## Computing w_p
 
+        # Compute AQA* + R
+        top_left_matrix = self.compute_top_left_matrix()
+        # Invert the matrix
+        top_left_matrix_inv = np.linalg.inv(top_left_matrix)
+
+        result = self.forward_property_operator(self.prior_total_load)
+        
+        for i in range(set_of_data_vectors.shape[0]):
+            v_minus_vbar = set_of_data_vectors[i] - self.forward_operator(self.prior_total_load)
+            result += self.bottom_left_operator(top_left_matrix_inv @ v_minus_vbar)
+        
+        return result
+    
+    def compute_posterior_covariance_matrix(self, set_of_data_vectors):
+        ## Computing s
+
+        # Compute AQA* + R
+        top_left_matrix = self.compute_top_left_matrix()
+        # Invert the matrix
+        top_left_matrix_inv = np.linalg.inv(top_left_matrix)
+        # Compute AQB*
+        top_right_matrix = self.compute_top_right_matrix()
+        # Compute BQA*
+        bottom_left_matrix = self.compute_bottom_left_matrix()
+        # Compute BQB*
+        bottom_right_matrix = self.compute_bottom_right_matrix()
+
+        # Compute the matrix
+        return bottom_right_matrix - bottom_left_matrix @ top_left_matrix_inv @ top_right_matrix
+
+    def compute_posterior_load(self, set_of_data_vectors):
+        ## Computing u_p
+
+        # Compute AQA* + R
+        top_left_matrix = self.compute_top_left_matrix()
+        # Invert the matrix
+        top_left_matrix_inv = np.linalg.inv(top_left_matrix)
+
+        result = self.prior_total_load
+        
+        for i in range(set_of_data_vectors.shape[0]):
+            v_minus_vbar = set_of_data_vectors[i] - self.forward_operator(self.prior_total_load)
+            result += self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ v_minus_vbar))
+        
+        return result
+    
+    def apply_posterior_load_covariance_matrix(self, set_of_data_vectors, vector):
+        ## Computing Q_p
+
+        # Compute AQA* + R
+        top_left_matrix = self.compute_top_left_matrix()
+        # Invert the matrix
+        top_left_matrix_inv = np.linalg.inv(top_left_matrix)
+
+        # Compute the matrix
+        return self.apply_full_load_covariance(vector) - self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ self.forward_operator(self.apply_full_load_covariance(vector))))
         
 
     
@@ -436,6 +499,12 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 # - Start working on computing the block matrices
 # - Look at the errors in the Wahr method
 # - Decide on length vs size naming 
+# - Make some new matrices w_p and s
+# - Compute the posterior load
+# - Try out some linear solvers
+# - Work out multiprocessing
+        
+
 
 
 

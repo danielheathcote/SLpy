@@ -423,7 +423,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
         return matrix
 
-    def compute_posterior_property_vector(self, set_of_data_vectors):
+    def compute_posterior_property_vector(self, data_vector):
         ## Computing w_p
 
         # Compute AQA* + R
@@ -431,15 +431,11 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         # Invert the matrix
         top_left_matrix_inv = np.linalg.inv(top_left_matrix)
 
-        result = self.forward_property_operator(self.prior_total_load)
-        
-        for i in range(set_of_data_vectors.shape[0]):
-            v_minus_vbar = set_of_data_vectors[i] - self.forward_operator(self.prior_total_load)
-            result += self.bottom_left_operator(top_left_matrix_inv @ v_minus_vbar)
-        
-        return result
+        v_minus_vbar = data_vector - self.forward_operator(self.prior_total_load)
+
+        return self.forward_property_operator(self.prior_total_load) + self.bottom_left_operator(top_left_matrix_inv @ v_minus_vbar)
     
-    def compute_posterior_covariance_matrix(self, set_of_data_vectors):
+    def compute_posterior_covariance_matrix(self):
         ## Computing s
 
         # Compute AQA* + R
@@ -456,23 +452,19 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         # Compute the matrix
         return bottom_right_matrix - bottom_left_matrix @ top_left_matrix_inv @ top_right_matrix
 
-    def compute_posterior_load(self, set_of_data_vectors):
+    def compute_posterior_load(self, data_vector):
         ## Computing u_p
 
         # Compute AQA* + R
         top_left_matrix = self.compute_top_left_matrix()
         # Invert the matrix
         top_left_matrix_inv = np.linalg.inv(top_left_matrix)
-
-        result = self.prior_total_load
         
-        for i in range(set_of_data_vectors.shape[0]):
-            v_minus_vbar = set_of_data_vectors[i] - self.forward_operator(self.prior_total_load)
-            result += self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ v_minus_vbar))
+        v_minus_vbar = data_vector - self.forward_operator(self.prior_total_load)
         
-        return result
+        return self.prior_total_load + self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ v_minus_vbar))
     
-    def apply_posterior_load_covariance_matrix(self, set_of_data_vectors, vector):
+    def apply_posterior_load_covariance_matrix(self, vector):
         ## Computing Q_p
 
         # Compute AQA* + R
@@ -480,10 +472,9 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         # Invert the matrix
         top_left_matrix_inv = np.linalg.inv(top_left_matrix)
 
-        # Compute the matrix
+        # Compute the action of Q_p
         return self.apply_full_load_covariance(vector) - self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ self.forward_operator(self.apply_full_load_covariance(vector))))
         
-
     
 # What have I done:
 # - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)
@@ -492,6 +483,8 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 # - Initialise gaussian weighting thing using lists of lat lon and width. New abstract method which returns the length of property vector
 # - Work out a way to downsample sea level data to L=64 (either by initialising some grid and interpolating manually, or by pyshtools expansions)
 # - Appraise the current framework for doing the priors (I don't think it needs to be particularly interactive)
+# - Make some new matrices w_p and s
+# - Compute the posterior load
 
 
 # What I need to do:
@@ -499,10 +492,9 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 # - Start working on computing the block matrices
 # - Look at the errors in the Wahr method
 # - Decide on length vs size naming 
-# - Make some new matrices w_p and s
-# - Compute the posterior load
 # - Try out some linear solvers
 # - Work out multiprocessing
+# - Make some cool plots of w
         
 
 

@@ -259,9 +259,15 @@ class PriorClass:
 
         return self.apply_individual_load_covariance(self.prior_ice_load, self.ice_covariance_Q, fun) + self.apply_individual_load_covariance(self.prior_ocean_load, self.ocean_covariance_Q, fun)
 
-    def apply_Q_covariance(self, fun):
+    def set_ice_covariance(self, Q):
+        ## Sets the ice covariance operator
 
-        pass
+        self.ice_covariance_Q = Q
+
+    def set_ocean_covariance(self, Q):
+        ## Sets the ocean covariance operator
+
+        self.ocean_covariance_Q = Q
 
 class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 

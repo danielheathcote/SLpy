@@ -6,6 +6,7 @@ import xarray as xr
 from abc import ABC, abstractmethod
 from multiprocessing import Pool
 from functools import partial
+from scipy import optimize
 
 from numpy import pi as pi
 
@@ -481,6 +482,20 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
         # Compute the action of Q_p
         return self.apply_full_load_covariance(vector) - self.apply_full_load_covariance(self.adjoint_operator(top_left_matrix_inv @ self.forward_operator(self.apply_full_load_covariance(vector))))
         
+    def loss_function(self, guess, data_vec):
+        ## Loss fucntion for top left operator AQA* + R
+
+        return np.linalg.norm(self.top_left_operator(guess) - data_vec)
+    
+    def approximate_top_left_inverse(self, data_vec):
+        ## Function which approximates the inverse of AQA* + R
+
+        initial_guess = data_vec
+        return optimize.minimize(self.loss_function, initial_guess, args=(data_vec,))
+
+
+
+
     
 # What have I done:
 # - Created forward and adjoint operators in GraceSolver (coiuld be extended to take vectors directly)

@@ -515,7 +515,7 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 # - Decide on length vs size naming 
 # - Try out some linear solvers
 # - Work out multiprocessing
-# - Make some cool plots of w
+# - Make some cool plots of w .
         
 
 

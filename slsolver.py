@@ -73,7 +73,7 @@ class GraceSolver(SeaLevelSolver):
         super().__init__(truncation_degree)
         self.observation_degree = observation_degree
         size = self.size_of_data_vector(observation_degree)
-        self.measurement_error_covariance_matrix = np.eye(size)
+        self.measurement_error_covariance_matrix = 10e-24*np.eye(size)
 
     def convert_glq_to_vector_of_sh_coeffs(self, glq_grid):
         ## Converts a GLQ grid to a vector of SH coefficients, starting at l=2
@@ -283,9 +283,6 @@ class InferenceClass(GraceSolver, PropertyClassGaussian, PriorClass):
 
         synthetic_dataset = np.zeros((num_samples, self.size_of_data_vector(self.observation_degree)))
         synthetic_dataset_errors = synthetic_dataset.copy()
-
-        ## Set R
-        self.scale_measurement_error_covariance_matrix(1e-5)
 
         ## Initialise the full loads
         load_samples = [self.sample_full_load() for _ in range(num_samples)]

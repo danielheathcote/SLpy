@@ -236,14 +236,16 @@ class PriorClass:
         self.prior_total_load = self.prior_ice_load + self.prior_ocean_load
 
         ## Set the covariances
-        self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
-        self.ocean_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2)
+        self.ice_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2, b=b)
+        self.ocean_covariance_Q = RF.sobolev_covariance(truncation_degree, s=2, mu=0.2, b=b)
 
+        ## Sets the prior_total_load to a gaussian random field
+        #self.prior_total_load = pysh.SHGrid.from_zeros(lmax=self.truncation_degree,grid = 'GLQ')
 
     def sample_individual_load(self, mean_field, Q):
         ## For a given mean field and covariance operator Q, samples a random field
 
-        return mean_field*(RF.random_field(Q) + 1)
+        return mean_field*(RF.random_field(Q, b=b) + 1)
 
     def apply_individual_load_covariance(self, mean_field, Q, fun):
         ## For a given mean field, covariance operator Q and function, applies the covariance operator to the function
@@ -254,11 +256,13 @@ class PriorClass:
         ## Samples a full load field
 
         return self.sample_individual_load(self.prior_ice_load, self.ice_covariance_Q) + self.sample_individual_load(self.prior_ocean_load, self.ocean_covariance_Q)
+        #return RF.random_field(self.ice_covariance_Q, b=b)
     
     def apply_full_load_covariance(self, fun):
         ## Applies the full load covariance operator to a function
 
         return self.apply_individual_load_covariance(self.prior_ice_load, self.ice_covariance_Q, fun) + self.apply_individual_load_covariance(self.prior_ocean_load, self.ocean_covariance_Q, fun)
+        #return RF.apply_covariance(self.ice_covariance_Q, fun)
 
     def set_ice_covariance(self, Q):
         ## Sets the ice covariance operator
